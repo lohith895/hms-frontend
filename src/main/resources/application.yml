@@ -1,0 +1,8 @@
+spring:
+  profiles:
+    active: dev
+  application:
+    name: hospital-management-system
+
+server:
+  port: 8080

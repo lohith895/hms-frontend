@@ -1,0 +1,41 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://db.opnzdygyjgamarzwzftt.supabase.co:5432/postgres
+    username: postgres
+    password: sumanth@2004
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    consumer:
+      group-id: hms-notification-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring:
+          json:
+            trusted:
+              packages: "com.hospital.*"
+
+hospital:
+  jwt:
+    # 256-bit secret key (HMAC-SHA256)
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    # Access token expiration: 15 minutes (900000 ms)
+    expiration: 900000
+    # Refresh token expiration: 7 days (604800000 ms)
+    refreshExpiration: 604800000
+
