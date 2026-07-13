@@ -71,12 +71,53 @@ const Register: React.FC = () => {
   const [certification, setCertification] = useState('');
 
   const [departments, setDepartments] = useState<any[]>([]);
+  const [specializations, setSpecializations] = useState<any[]>([]);
+  const [selectedSpec, setSelectedSpec] = useState<string | null>(null);
+  const [customSpec, setCustomSpec] = useState('');
 
   React.useEffect(() => {
     api.get('/departments/public').then((res) => {
       setDepartments(res.data);
     }).catch(console.error);
+
+    api.get('/specializations/public').then((res) => {
+      setSpecializations(res.data);
+    }).catch(console.error);
   }, []);
+
+  const filteredSpecs = React.useMemo(() => {
+    if (!departmentId) return specializations;
+    return specializations.filter(s => s.department && String(s.department.id) === departmentId);
+  }, [specializations, departmentId]);
+
+  const specData = React.useMemo(() => {
+    const list = filteredSpecs.map(s => ({ value: s.name, label: s.name }));
+    const uniqueList: any[] = [];
+    const seen = new Set();
+    list.forEach(item => {
+      if (!seen.has(item.value)) {
+        seen.add(item.value);
+        uniqueList.push(item);
+      }
+    });
+    uniqueList.push({ value: 'CUSTOM_SPECIALIZATION', label: 'Add custom specialization...' });
+    return uniqueList;
+  }, [filteredSpecs]);
+
+  const handleSpecChange = (val: string | null) => {
+    setSelectedSpec(val);
+    if (val !== 'CUSTOM_SPECIALIZATION') {
+      setSpecialization(val || '');
+    } else {
+      setSpecialization(customSpec);
+    }
+  };
+
+  const handleCustomSpecChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.currentTarget.value;
+    setCustomSpec(val);
+    setSpecialization(val);
+  };
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +177,15 @@ const Register: React.FC = () => {
       setSuccess(true);
       setTimeout(() => navigate('/login'), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      if (err.response?.data?.validationErrors) {
+        const errorsMap = err.response.data.validationErrors;
+        const msg = Object.entries(errorsMap)
+          .map(([field, errorMsg]) => `${errorMsg}`)
+          .join('\n');
+        setError(msg);
+      } else {
+        setError(err.response?.data?.message || 'Registration failed. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -262,7 +311,7 @@ const Register: React.FC = () => {
                 }}
               >
                 <IconAlertCircle size={15} style={{ color: '#FB7185', flexShrink: 0, marginTop: 1 }} />
-                <span style={{ color: '#FDA4AF', fontSize: '13px' }}>{error}</span>
+                <span style={{ color: '#FDA4AF', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{error}</span>
               </motion.div>
             )}
           </AnimatePresence>
@@ -362,27 +411,47 @@ const Register: React.FC = () => {
             {role === 'ROLE_DOCTOR' && (
               <>
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-                  <TextInput
-                    label="Specialization"
-                    placeholder="e.g. Cardiology"
-                    value={specialization}
-                    onChange={(e) => setSpecialization(e.currentTarget.value)}
-                    required
-                    leftSection={<IconStethoscope size={16} style={{ color: '#4D6580' }} />}
-                    styles={inputStyles}
-                  />
                   <Select
                     label="Department"
                     placeholder="Select Department"
                     value={departmentId}
-                    onChange={setDepartmentId}
+                    onChange={(val) => {
+                      setDepartmentId(val);
+                      setSelectedSpec(null);
+                      setSpecialization('');
+                    }}
                     data={departments.map(d => ({ value: String(d.id), label: d.name }))}
                     styles={{
                       input: { backgroundColor: 'rgba(8,13,26,0.7)', borderColor: '#1C2B46', color: '#F0F6FF', height: '46px' },
                       label: { color: '#8BA3C7', marginBottom: '7px', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' }
                     }}
                   />
+                  <Select
+                    label="Specialization"
+                    placeholder="Select Specialization"
+                    value={selectedSpec}
+                    onChange={handleSpecChange}
+                    data={specData}
+                    required
+                    leftSection={<IconStethoscope size={16} style={{ color: '#4D6580' }} />}
+                    styles={{
+                      input: { backgroundColor: 'rgba(8,13,26,0.7)', borderColor: '#1C2B46', color: '#F0F6FF', height: '46px' },
+                      label: { color: '#8BA3C7', marginBottom: '7px', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' }
+                    }}
+                  />
                 </SimpleGrid>
+
+                {selectedSpec === 'CUSTOM_SPECIALIZATION' && (
+                  <TextInput
+                    label="Custom Specialization"
+                    placeholder="Type your custom specialization"
+                    value={customSpec}
+                    onChange={handleCustomSpecChange}
+                    required
+                    leftSection={<IconStethoscope size={16} style={{ color: '#4D6580' }} />}
+                    styles={inputStyles}
+                  />
+                )}
                 <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
                   <NumberInput
                     label="Experience (Yrs)"
@@ -531,32 +600,50 @@ const Register: React.FC = () => {
             )}
 
             {role === 'ROLE_LAB_TECHNICIAN' && (
-              <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
-                <TextInput
-                  label="Specialization"
-                  placeholder="e.g. Pathology"
-                  value={specialization}
-                  onChange={(e) => setSpecialization(e.currentTarget.value)}
-                  leftSection={<IconStethoscope size={16} style={{ color: '#4D6580' }} />}
-                  styles={inputStyles}
-                />
-                <TextInput
-                  label="Certification"
-                  placeholder="e.g. ASCP"
-                  value={certification}
-                  onChange={(e) => setCertification(e.currentTarget.value)}
-                  leftSection={<IconCertificate size={16} style={{ color: '#4D6580' }} />}
-                  styles={inputStyles}
-                />
-                <TextInput
-                  label="Phone Number"
-                  placeholder="123-456-7890"
-                  value={phone}
-                  onChange={(e) => setPhone(e.currentTarget.value)}
-                  leftSection={<IconPhone size={16} style={{ color: '#4D6580' }} />}
-                  styles={inputStyles}
-                />
-              </SimpleGrid>
+              <>
+                <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="md">
+                  <Select
+                    label="Specialization"
+                    placeholder="Select Specialization"
+                    value={selectedSpec}
+                    onChange={handleSpecChange}
+                    data={specData}
+                    leftSection={<IconStethoscope size={16} style={{ color: '#4D6580' }} />}
+                    styles={{
+                      input: { backgroundColor: 'rgba(8,13,26,0.7)', borderColor: '#1C2B46', color: '#F0F6FF', height: '46px' },
+                      label: { color: '#8BA3C7', marginBottom: '7px', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase' }
+                    }}
+                  />
+                  <TextInput
+                    label="Certification"
+                    placeholder="e.g. ASCP"
+                    value={certification}
+                    onChange={(e) => setCertification(e.currentTarget.value)}
+                    leftSection={<IconCertificate size={16} style={{ color: '#4D6580' }} />}
+                    styles={inputStyles}
+                  />
+                  <TextInput
+                    label="Phone Number"
+                    placeholder="123-456-7890"
+                    value={phone}
+                    onChange={(e) => setPhone(e.currentTarget.value)}
+                    leftSection={<IconPhone size={16} style={{ color: '#4D6580' }} />}
+                    styles={inputStyles}
+                  />
+                </SimpleGrid>
+
+                {selectedSpec === 'CUSTOM_SPECIALIZATION' && (
+                  <TextInput
+                    label="Custom Specialization"
+                    placeholder="Type your custom specialization"
+                    value={customSpec}
+                    onChange={handleCustomSpecChange}
+                    required
+                    leftSection={<IconStethoscope size={16} style={{ color: '#4D6580' }} />}
+                    styles={inputStyles}
+                  />
+                )}
+              </>
             )}
 
             {role === 'ROLE_ADMIN' && (

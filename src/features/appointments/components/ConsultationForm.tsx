@@ -38,6 +38,8 @@ interface ConsultationFormProps {
 
 const ConsultationForm: React.FC<ConsultationFormProps> = ({ opened, onClose, appointment, onSuccess }) => {
   const [loading, setLoading] = useState(false);
+  const [savingTests, setSavingTests] = useState(false);
+  const [savingMedicines, setSavingMedicines] = useState(false);
   
   // Data for dropdowns
   const [medicines, setMedicines] = useState<Medicine[]>([]);
@@ -113,6 +115,52 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ opened, onClose, ap
     const newL = [...labTestOrders];
     newL[index] = { ...newL[index], [field]: value };
     setLabTestOrders(newL);
+  };
+
+  const handleSaveTests = async () => {
+    if (labTestOrders.length === 0) {
+      notifications.show({ title: 'Error', message: 'No laboratory tests to save', color: 'red' });
+      return;
+    }
+
+    const invalidLabTest = labTestOrders.find(l => !l.testId);
+    if (invalidLabTest) {
+      notifications.show({ title: 'Error', message: 'Please select a lab test for all ordered tests', color: 'red' });
+      return;
+    }
+
+    setSavingTests(true);
+    try {
+      await api.post(`/medical-records/appointments/${appointment.id}/lab-tests`, labTestOrders);
+      notifications.show({ title: 'Success', message: 'Laboratory tests successfully ordered & dispatched!', color: 'teal' });
+    } catch (err: any) {
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to save tests', color: 'red' });
+    } finally {
+      setSavingTests(false);
+    }
+  };
+
+  const handleSaveMedicines = async () => {
+    if (prescriptions.length === 0) {
+      notifications.show({ title: 'Error', message: 'No prescribed medicines to save', color: 'red' });
+      return;
+    }
+
+    const invalidPrescription = prescriptions.find(p => !p.medicineId || !p.dosage || !p.frequency || p.durationDays < 1 || p.quantity < 1);
+    if (invalidPrescription) {
+      notifications.show({ title: 'Error', message: 'Please fill all fields correctly for prescribed medicines', color: 'red' });
+      return;
+    }
+
+    setSavingMedicines(true);
+    try {
+      await api.post(`/medical-records/appointments/${appointment.id}/prescriptions`, prescriptions);
+      notifications.show({ title: 'Success', message: 'Prescription successfully saved & dispatched to Pharmacy!', color: 'teal' });
+    } catch (err: any) {
+      notifications.show({ title: 'Error', message: err.response?.data?.message || 'Failed to save prescription', color: 'red' });
+    } finally {
+      setSavingMedicines(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -315,6 +363,21 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ opened, onClose, ap
                         />
                       </Box>
                     ))}
+                    <Group justify="flex-end" mt="md">
+                      <Button
+                        size="xs"
+                        variant="filled"
+                        color="cyan"
+                        loading={savingTests}
+                        onClick={handleSaveTests}
+                        style={{
+                          background: 'linear-gradient(135deg, #06B6D4 0%, #0891B2 100%)',
+                          border: 'none'
+                        }}
+                      >
+                        Save Tests
+                      </Button>
+                    </Group>
                   </div>
                 )}
               </Box>
@@ -388,6 +451,21 @@ const ConsultationForm: React.FC<ConsultationFormProps> = ({ opened, onClose, ap
                         </Group>
                       </Box>
                     ))}
+                    <Group justify="flex-end" mt="md">
+                      <Button
+                        size="xs"
+                        variant="filled"
+                        color="violet"
+                        loading={savingMedicines}
+                        onClick={handleSaveMedicines}
+                        style={{
+                          background: 'linear-gradient(135deg, #8B5CF6 0%, #7C3AED 100%)',
+                          border: 'none'
+                        }}
+                      >
+                        Save Medicine
+                      </Button>
+                    </Group>
                   </div>
                 )}
               </Box>

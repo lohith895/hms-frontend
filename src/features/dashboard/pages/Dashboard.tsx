@@ -36,6 +36,7 @@ import FinanceManagerPortal from '../../billing/components/FinanceManagerPortal'
 import PatientBilling from '../../billing/components/PatientBilling';
 import AiAssistantWidget from '../../../components/AiAssistantWidget';
 import ProfileModal from '../../../components/ProfileModal';
+import { DepartmentManager } from '../components/DepartmentManager';
 
 /* ── Animation variants ──────────────────────────────── */
 const containerVariants = {
@@ -187,7 +188,7 @@ const Dashboard: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'appointments' | 'reports' | 'emr' | 'pharmacy' | 'laboratory' | 'billing'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'appointments' | 'reports' | 'emr' | 'pharmacy' | 'laboratory' | 'billing' | 'departments'>('dashboard');
   const [notifications, setNotifications] = useState<any[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [dashboardStats, setDashboardStats] = useState<any[]>([]);
@@ -431,6 +432,17 @@ const Dashboard: React.FC = () => {
                   Reports
                 </Button>
               )}
+              {user.role === 'ROLE_ADMIN' && (
+                <Button
+                  variant={activeTab === 'departments' ? 'light' : 'subtle'}
+                  size="xs"
+                  radius="md"
+                  onClick={() => setActiveTab('departments')}
+                  style={{ color: activeTab === 'departments' ? '#22D3EE' : '#8BA3C7' }}
+                >
+                  Departments & Specs
+                </Button>
+              )}
             </div>
 
             {/* Notification Bell */}
@@ -554,6 +566,10 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'reports' && (
           <ReportsCenter currentUser={user} />
+        )}
+
+        {activeTab === 'departments' && (
+          <DepartmentManager />
         )}
 
         {activeTab === 'dashboard' && (

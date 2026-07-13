@@ -39,7 +39,7 @@ const EMRHistory: React.FC<EMRHistoryProps> = ({ currentUser }) => {
   useEffect(() => {
     if (isClinician) {
       setFetchingPatients(true);
-      api.get('/users/patients') // Updated endpoint based on FinanceManagerPortal
+      api.get('/patients') // Fetch patients list from correct endpoint
         .then((res) => {
           setPatients(res.data);
         })

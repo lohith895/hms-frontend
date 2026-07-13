@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Button, Table, Tabs, Badge, TextInput, Textarea, Select, Modal, NumberInput, Card, Grid, Text, Title, Group, Divider, Loader, Box, Alert, ScrollArea } from '@mantine/core';
-import { IconPill, IconPlus, IconSearch, IconAlertTriangle, IconCheck, IconUser, IconActivity, IconFileText, IconTrendingUp, IconReceipt2, IconPrinter } from '@tabler/icons-react';
+import { Button, Table, Tabs, Badge, TextInput, Textarea, Select, Modal, NumberInput, Card, Grid, Text, Title, Group, Divider, Loader, Box, Alert, ScrollArea, ActionIcon } from '@mantine/core';
+import { IconPill, IconPlus, IconSearch, IconAlertTriangle, IconCheck, IconUser, IconActivity, IconFileText, IconTrendingUp, IconReceipt2, IconPrinter, IconEdit } from '@tabler/icons-react';
 import api from '../../../utils/api';
 import { notifications } from '@mantine/notifications';
 
@@ -49,9 +49,10 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
   const [stockQuantity, setStockQuantity] = useState<number>(100);
   const [pricePerUnit, setPricePerUnit] = useState<number>(10);
   const [submittingBatch, setSubmittingBatch] = useState(false);
+  const [editingMedicine, setEditingMedicine] = useState<any | null>(null);
 
   const isPharmacist = currentUser?.role === 'ROLE_PHARMACIST' || currentUser?.role === 'ROLE_ADMIN';
-  const isInventoryManager = currentUser?.role === 'ROLE_INVENTORY_MANAGER' || currentUser?.role === 'ROLE_ADMIN';
+  const isInventoryManager = currentUser?.role === 'ROLE_INVENTORY_MANAGER' || currentUser?.role === 'ROLE_PHARMACIST' || currentUser?.role === 'ROLE_ADMIN';
 
   // Load initial data
   const loadData = React.useCallback(async () => {
@@ -142,7 +143,7 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
     }
   };
 
-  // Handle Create Drug
+  // Handle Create/Update Drug
   const handleAddDrug = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!drugName || !drugCode || !drugCategory || !drugManufacturer) {
@@ -152,36 +153,125 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
     
     setSubmittingDrug(true);
     try {
-      await api.post('/pharmacy/medicines', {
+      const payload = {
         name: drugName,
         code: drugCode,
         category: drugCategory,
         manufacturer: drugManufacturer,
         description: drugDescription,
-        active: true
-      });
-      
-      notifications.show({
-        title: 'Drug Registered',
-        message: `${drugName} successfully registered in system.`,
-        color: 'teal'
-      });
+        active: editingMedicine ? editingMedicine.active : true
+      };
+
+      if (editingMedicine) {
+        await api.put(`/pharmacy/medicines/${editingMedicine.id}`, payload);
+        notifications.show({
+          title: 'Drug Updated',
+          message: `${drugName} successfully updated.`,
+          color: 'teal'
+        });
+      } else {
+        await api.post('/pharmacy/medicines', payload);
+        notifications.show({
+          title: 'Drug Registered',
+          message: `${drugName} successfully registered in system.`,
+          color: 'teal'
+        });
+      }
       
       setDrugName('');
       setDrugCode('');
       setDrugCategory('');
       setDrugManufacturer('');
       setDrugDescription('');
+      setEditingMedicine(null);
       setAddDrugOpened(false);
       loadData();
     } catch (err: any) {
       notifications.show({
-        title: 'Registration Failed',
-        message: err.response?.data?.message || 'Make sure the medicine code is unique.',
+        title: 'Operation Failed',
+        message: err.response?.data?.message || 'Ensure the medicine code is unique.',
         color: 'red'
       });
     } finally {
       setSubmittingDrug(false);
+    }
+  };
+
+  const handleEditDrugClick = (item: any) => {
+    setEditingMedicine({
+      id: item.medicineId,
+      name: item.medicineName,
+      code: item.medicineCode,
+      category: item.medicineCategory,
+      manufacturer: item.medicineManufacturer || 'GlobalPharma Co.',
+      description: item.medicineDescription || '',
+      active: true
+    });
+    setDrugName(item.medicineName);
+    setDrugCode(item.medicineCode);
+    setDrugCategory(item.medicineCategory);
+    setDrugManufacturer(item.medicineManufacturer || 'GlobalPharma Co.');
+    setDrugDescription(item.medicineDescription || '');
+    setAddDrugOpened(true);
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    notifications.show({
+      id: 'upload-loading',
+      title: 'Uploading Excel',
+      message: 'Importing medicines in bulk, please wait...',
+      loading: true,
+      autoClose: false,
+    });
+
+    try {
+      await api.post('/pharmacy/medicines/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      notifications.update({
+        id: 'upload-loading',
+        title: 'Success',
+        message: 'Medicines imported successfully.',
+        color: 'teal',
+        loading: false,
+        autoClose: 3000,
+      });
+      loadData();
+    } catch (err: any) {
+      notifications.update({
+        id: 'upload-loading',
+        title: 'Upload Failed',
+        message: err.response?.data?.message || 'Check the Excel format and content.',
+        color: 'red',
+        loading: false,
+        autoClose: 5000,
+      });
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      const response = await api.get('/pharmacy/inventory/export', {
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'pharmacy_inventory.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      notifications.show({ title: 'Export Complete', message: 'Inventory successfully exported to Excel.', color: 'teal' });
+    } catch (err) {
+      notifications.show({ title: 'Export Failed', message: 'Failed to export inventory.', color: 'red' });
     }
   };
 
@@ -217,9 +307,12 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
       setAddBatchOpened(false);
       loadData();
     } catch (err: any) {
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to add batch.';
+      const validationErrors = err.response?.data?.validationErrors;
+      const details = validationErrors ? ': ' + Object.values(validationErrors).join(', ') : '';
       notifications.show({
         title: 'Failed to Add Batch',
-        message: err.response?.data?.message || 'Failed to add batch.',
+        message: `${errorMsg}${details}`,
         color: 'red'
       });
     } finally {
@@ -304,10 +397,50 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
               leftSection={<IconPill size={16} />}
               variant="light"
               color="blue"
-              onClick={() => setAddDrugOpened(true)}
+              onClick={() => {
+                setEditingMedicine(null);
+                setDrugName('');
+                setDrugCode('');
+                setDrugCategory('');
+                setDrugManufacturer('');
+                setDrugDescription('');
+                setAddDrugOpened(true);
+              }}
               style={{ borderRadius: '12px', height: '42px', fontWeight: 600 }}
             >
               Register Drug
+            </Button>
+          )}
+
+          {isInventoryManager && (
+            <Button
+              leftSection={<IconFileText size={16} />}
+              variant="outline"
+              color="green"
+              radius="md"
+              component="label"
+              style={{ height: '42px', fontWeight: 600 }}
+            >
+              Import Excel
+              <input
+                type="file"
+                accept=".xlsx"
+                hidden
+                onChange={handleExcelUpload}
+              />
+            </Button>
+          )}
+
+          {isInventoryManager && (
+            <Button
+              leftSection={<IconPrinter size={16} />}
+              variant="outline"
+              color="teal"
+              radius="md"
+              onClick={handleExportExcel}
+              style={{ height: '42px', fontWeight: 600 }}
+            >
+              Export Excel
             </Button>
           )}
         </Group>
@@ -451,6 +584,27 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
                 {/* TAB 2: Inventory Directory */}
                 <Tabs.Panel value="inventory">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    
+                    <Alert title="Excel Import Instructions" color="teal" icon={<IconFileText size={16} />} radius="md" variant="light" withCloseButton>
+                      <Text size="xs" style={{ lineHeight: 1.6, color: '#8BA3C7' }}>
+                        To import medicines in bulk, upload an Excel file (.xlsx) containing the following columns:
+                        <br />
+                        • <strong>Name</strong> (required) — e.g. Paracetamol 500mg
+                        <br />
+                        • <strong>Code</strong> (required, unique) — e.g. MED-PAR-500
+                        <br />
+                        • <strong>Category</strong> (required) — e.g. Analgesics, Antibiotics, Antacids
+                        <br />
+                        • <strong>Manufacturer</strong> (required) — e.g. Pfizer
+                        <br />
+                        • <strong>Description</strong> (optional) — e.g. Pain reliever
+                        <br />
+                        • <strong>Stock Quantity</strong> (optional) — e.g. 100 (creates a stock batch automatically)
+                        <br />
+                        • <strong>Price Per Unit</strong> (optional) — e.g. 1.50
+                      </Text>
+                    </Alert>
+
                     <TextInput
                       placeholder="Search inventory by medicine name, code, category, batch..."
                       leftSection={<IconSearch size={16} style={{ color: '#8BA3C7' }} />}
@@ -499,9 +653,22 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
                               return (
                                 <Table.Tr key={item.id} style={{ backgroundColor: isExpired ? 'rgba(251,113,133,0.02)' : 'transparent' }}>
                                   <Table.Td>
-                                    <div>
-                                      <Text size="sm" style={{ fontWeight: 600 }}>{item.medicineName}</Text>
-                                      <Text size="xs" style={{ color: '#4D6580' }}>Code: {item.medicineCode}</Text>
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                      <div>
+                                        <Text size="sm" style={{ fontWeight: 600 }}>{item.medicineName}</Text>
+                                        <Text size="xs" style={{ color: '#4D6580' }}>Code: {item.medicineCode}</Text>
+                                      </div>
+                                      {isInventoryManager && (
+                                        <ActionIcon 
+                                          variant="subtle" 
+                                          color="blue" 
+                                          size="sm"
+                                          onClick={() => handleEditDrugClick(item)}
+                                          title="Edit Medicine Definition"
+                                        >
+                                          <IconEdit size={14} />
+                                        </ActionIcon>
+                                      )}
                                     </div>
                                   </Table.Td>
                                   <Table.Td>
@@ -621,11 +788,11 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
         </Grid>
       )}
 
-      {/* ── MODAL 1: Register New Drug ── */}
+      {/* ── MODAL 1: Register/Edit Drug ── */}
       <Modal
         opened={addDrugOpened}
-        onClose={() => setAddDrugOpened(false)}
-        title="Register New Medication definition"
+        onClose={() => { setAddDrugOpened(false); setEditingMedicine(null); }}
+        title={editingMedicine ? "Update Medication Definition" : "Register New Medication definition"}
         radius="lg"
         styles={{
           content: { backgroundColor: '#0E1628', border: '1px solid #1C2B46', color: '#F0F6FF' },
@@ -705,7 +872,7 @@ const PharmacyPortal: React.FC<PharmacyPortalProps> = ({ currentUser }) => {
               border: 'none',
             }}
           >
-            Register Drug
+            {editingMedicine ? "Update Details" : "Register Drug"}
           </Button>
         </form>
       </Modal>
